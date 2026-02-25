@@ -84,11 +84,10 @@
             const [preview, setPreview] = useState(null);
             const [attachedBase64, setAttachedBase64] = useState(null);
             const [error, setError] = useState(null);
-            const [userApiKey, setUserApiKey] = useState(""); // User ki api key save karne ke liye
+            const [userApiKey, setUserApiKey] = useState(""); 
             
             const fileInputRef = useRef(null);
 
-            // API key localStorage mein save/load karne ka function
             useEffect(() => {
                 const savedKey = localStorage.getItem('gemini_api_key');
                 if(savedKey) setUserApiKey(savedKey);
@@ -97,7 +96,7 @@
             const handleApiKeyChange = (e) => {
                 const val = e.target.value;
                 setUserApiKey(val);
-                localStorage.setItem('gemini_api_key', val); // Browser mein save rahegi bar bar nahi daalni padegi
+                localStorage.setItem('gemini_api_key', val); 
             };
 
             const styles = [
@@ -112,10 +111,16 @@
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
+                    // Image size check (Max 2MB to avoid payload errors)
+                    if (file.size > 2 * 1024 * 1024) {
+                        setError("Photo ka size 2MB se chota hona chahiye warna Google API reject kar degi.");
+                        return;
+                    }
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         setPreview(reader.result);
                         setAttachedBase64(reader.result.split(',')[1]);
+                        setError(null);
                     };
                     reader.readAsDataURL(file);
                 }
@@ -155,13 +160,23 @@
                             })
                         });
                         
-                        if (!response.ok) throw new Error("API Key galat hai ya connection error hai.");
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            let exactError = errorText;
+                            try {
+                                const errJson = JSON.parse(errorText);
+                                exactError = errJson.error?.message || errorText;
+                            } catch(e) {}
+                            throw new Error(`Google API Error: ${exactError}`);
+                        }
+                        
                         const data = await response.json();
                         const base64 = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
-                        if (!base64) throw new Error("Photo nahi ban payi. Kripya prompt badal kar try karein.");
+                        if (!base64) throw new Error("Photo nahi ban payi. API ne image data return nahi kiya.");
                         imageUrl = `data:image/png;base64,${base64}`;
                     } else {
-                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${userApiKey}`, {
+                        // Text to Image (Standard generation)
+                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${userApiKey}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -171,11 +186,15 @@
                         });
                         
                         if (!response.ok) {
-                            if (response.status === 400 || response.status === 403) {
-                                throw new Error("Aapki API Key invalid hai. Kripya nayi key check karein.");
-                            }
-                            throw new Error("Server se connect nahi ho paya.");
+                            const errorText = await response.text();
+                            let exactError = errorText;
+                            try {
+                                const errJson = JSON.parse(errorText);
+                                exactError = errJson.error?.message || errorText;
+                            } catch(e) {}
+                            throw new Error(`Google API Error: ${exactError}`);
                         }
+                        
                         const data = await response.json();
                         imageUrl = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
                     }
@@ -189,7 +208,7 @@
                     };
                     setGeneratedImages(prev => [newImage, ...prev]);
                 } catch (err) {
-                    setError(err.message || "API connection error. Please try again later.");
+                    setError(err.message || "Internet ya API connection error. Please try again later.");
                 } finally {
                     setIsGenerating(false);
                 }
@@ -207,7 +226,7 @@
                             <span className="text-xl font-bold tracking-tight gradient-text">ImagineStudio</span>
                         </div>
 
-                        {/* API KEY SECTION ADDED HERE */}
+                        {/* API KEY SECTION */}
                         <div className="space-y-3 bg-purple-900/20 p-4 rounded-2xl border border-purple-500/30">
                             <label className="text-[10px] font-bold text-purple-300 uppercase tracking-[2px] flex items-center gap-2">
                                 <Icon type="key" /> API Setup Zaroori Hai
@@ -293,7 +312,7 @@
                             </div>
                         </div>
 
-                        {error && <div className="bg-red-500/10 text-red-400 p-4 rounded-2xl border border-red-500/20 text-sm font-semibold flex items-center gap-2"><Icon type="x" /> {error}</div>}
+                        {error && <div className="bg-red-500/10 text-red-400 p-4 rounded-2xl border border-red-500/20 text-sm font-semibold flex items-center gap-2 break-words"><Icon type="x" /> {error}</div>}
 
                         <div className="space-y-6">
                             <h3 className="text-xl font-bold flex items-center gap-2">
