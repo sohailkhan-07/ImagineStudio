@@ -126,8 +126,9 @@
             };
 
             const generate = async () => {
-                if (!userApiKey.trim()) {
-                    setError("Image banane ke liye sidebar mein apni Gemini API Key daalna zaroori hai.");
+                // Agar photo attach ki hai, tabhi API key mangenge
+                if (attachedBase64 && !userApiKey.trim()) {
+                    setError("Photo modify karne ke liye sidebar mein Gemini API Key daalna zaroori hai.");
                     return;
                 }
                 if (!prompt.trim() && !attachedBase64) {
@@ -141,12 +142,11 @@
                 const finalPrompt = `${prompt}, ${selectedStyle} style, 8k resolution, cinematic lighting, ultra detailed, masterpiece`;
 
                 try {
-                    let response;
                     let imageUrl;
 
                     if (attachedBase64) {
-                        // IMAGE-TO-IMAGE MODEL (Gemini 2.5 Flash Image Preview)
-                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${userApiKey}`, {
+                        // IMAGE-TO-IMAGE MODEL (Google Gemini - Requires API Key)
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${userApiKey}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -174,29 +174,22 @@
                         const base64 = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
                         if (!base64) throw new Error("Photo nahi ban payi. API ne image data return nahi kiya.");
                         imageUrl = `data:image/png;base64,${base64}`;
-                    } else {
-                        // TEXT-TO-IMAGE MODEL (Imagen 4.0 - Corrected here)
-                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${userApiKey}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                instances: [{ prompt: finalPrompt }],
-                                parameters: { sampleCount: 1 }
-                            })
-                        });
                         
+                    } else {
+                        // TEXT-TO-IMAGE MODEL (Pollinations AI - 100% FREE, NO API KEY REQUIRED)
+                        const seed = Math.floor(Math.random() * 1000000);
+                        const width = quality === '4K' ? 1920 : 1024;
+                        const height = quality === '4K' ? 1080 : 1024;
+                        
+                        const pollUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?seed=${seed}&width=${width}&height=${height}&nologo=true`;
+                        
+                        const response = await fetch(pollUrl);
                         if (!response.ok) {
-                            const errorText = await response.text();
-                            let exactError = errorText;
-                            try {
-                                const errJson = JSON.parse(errorText);
-                                exactError = errJson.error?.message || errorText;
-                            } catch(e) {}
-                            throw new Error(`Google API Error: ${exactError}`);
+                            throw new Error("Free Image Server abhi busy hai. Kripya thodi der baad try karein.");
                         }
                         
-                        const data = await response.json();
-                        imageUrl = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+                        const blob = await response.blob();
+                        imageUrl = URL.createObjectURL(blob);
                     }
 
                     const newImage = {
@@ -208,7 +201,7 @@
                     };
                     setGeneratedImages(prev => [newImage, ...prev]);
                 } catch (err) {
-                    setError(err.message || "Internet ya API connection error. Please try again later.");
+                    setError(err.message || "Internet ya server connection error. Please try again later.");
                 } finally {
                     setIsGenerating(false);
                 }
@@ -226,11 +219,12 @@
                             <span className="text-xl font-bold tracking-tight gradient-text">ImagineStudio</span>
                         </div>
 
-                        {/* API KEY SECTION */}
+                        {/* API KEY SECTION (Updated Message) */}
                         <div className="space-y-3 bg-purple-900/20 p-4 rounded-2xl border border-purple-500/30">
                             <label className="text-[10px] font-bold text-purple-300 uppercase tracking-[2px] flex items-center gap-2">
-                                <Icon type="key" /> API Setup Zaroori Hai
+                                <Icon type="key" /> Image-to-Image Setup
                             </label>
+                            <p className="text-xs text-gray-400 mb-2">Note: Text se image banana FREE hai. API key sirf photo edit karne ke liye chahiye.</p>
                             <input 
                                 type="password" 
                                 placeholder="Paste Gemini API Key here..." 
@@ -238,9 +232,6 @@
                                 onChange={handleApiKeyChange}
                                 className="w-full bg-black/50 border border-purple-500/30 rounded-lg p-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                             />
-                            <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-[10px] text-purple-400 hover:text-white transition-colors underline block">
-                                Yahan click karke Free API Key lein
-                            </a>
                         </div>
 
                         <div className="space-y-4">
@@ -337,7 +328,7 @@
                                             <img src={img.url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                                             <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-all p-6 flex flex-col justify-between">
                                                 <div className="flex justify-end gap-2">
-                                                    <a href={img.url} download="imagine_studio_art.png" className="p-3 bg-white/10 hover:bg-white hover:text-black rounded-2xl text-white transition-all"><Icon type="download" /></a>
+                                                    <a href={img.url} download="imagine_studio_art.jpg" className="p-3 bg-white/10 hover:bg-white hover:text-black rounded-2xl text-white transition-all"><Icon type="download" /></a>
                                                     <button onClick={() => deleteImage(img.id)} className="p-3 bg-white/10 hover:bg-red-500 rounded-2xl text-white transition-all"><Icon type="trash" /></button>
                                                 </div>
                                                 <div>
